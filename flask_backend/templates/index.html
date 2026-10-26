@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Explainable NIDS · XGBoost + SHAP</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">◆</div>
+      <div>
+        <h1>Explainable NIDS</h1>
+        <p>XGBoost intrusion detection, explained live with SHAP</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="badge">NSL-KDD</span>
+      <span class="badge live"><span class="dot"></span> live monitor</span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="overview">Overview</button>
+    <button class="tab-btn" data-tab="traffic">Traffic Analysis</button>
+    <button class="tab-btn" data-tab="training">Model Training</button>
+    <button class="tab-btn" data-tab="shap">SHAP Explainability</button>
+  </nav>
+
+  <!-- ===================== OVERVIEW ===================== -->
+  <main id="tab-overview" class="tab-view">
+    <div class="metric-cards" id="metric-cards"></div>
+
+    <section class="panel">
+      <div class="panel-head"><h2>System Pipeline</h2><p class="hint-inline">Click a stage for detail</p></div>
+      <div class="pipeline-row" id="pipeline-row"></div>
+      <div class="pipeline-detail" id="pipeline-detail"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Live Detection Feed</h2>
+        <button class="mini-btn" id="live-toggle">⏸ Pause</button>
+      </div>
+      <p class="hint">Streaming simulated inference over held-out test flows, one every 2.5s.</p>
+      <div class="live-feed" id="live-feed"></div>
+    </section>
+  </main>
+
+  <!-- ===================== TRAFFIC ANALYSIS ===================== -->
+  <main id="tab-traffic" class="tab-view hidden layout">
+    <section class="panel input-panel">
+      <div class="panel-head">
+        <h2>Network Flow</h2>
+        <div class="mode-toggle">
+          <button class="mode-btn active" data-mode="sample">Sample flows</button>
+          <button class="mode-btn" data-mode="manual">Manual input</button>
+        </div>
+      </div>
+
+      <div id="sample-mode" class="mode-view">
+        <p class="hint">Pick a real flow from the held-out NSL-KDD test set — includes normal traffic and several attack categories.</p>
+        <div class="sample-grid" id="sample-grid"></div>
+      </div>
+
+      <div id="manual-mode" class="mode-view hidden">
+        <p class="hint">Adjust fields and run detection. Grouped by category — expand a section to edit.</p>
+        <div id="form-groups"></div>
+      </div>
+
+      <button id="predict-btn" class="predict-btn">Run Detection</button>
+    </section>
+
+    <section class="panel result-panel">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">⌁</div>
+        <p>Select a sample flow or enter values, then run detection to see the prediction and its SHAP explanation.</p>
+      </div>
+
+      <div id="result-content" class="hidden">
+        <div class="verdict-card" id="verdict-card">
+          <div class="verdict-left">
+            <div class="verdict-badge" id="verdict-badge">—</div>
+            <div class="verdict-sub" id="verdict-sub"></div>
+          </div>
+          <div class="verdict-right">
+            <div class="gauge-wrap">
+              <svg viewBox="0 0 120 70" class="gauge-svg" id="gauge-svg"></svg>
+              <div class="gauge-label" id="gauge-label">0%</div>
+            </div>
+            <div class="gauge-caption">attack probability</div>
+          </div>
+        </div>
+
+        <div class="truth-banner hidden" id="truth-banner"></div>
+
+        <div class="explain-block">
+          <div class="explain-head">
+            <h3>Why this prediction? <span class="sub">SHAP feature contributions</span></h3>
+          </div>
+          <div class="baseline-row">
+            <span>base rate</span>
+            <div class="baseline-track"><div class="baseline-fill" id="baseline-fill"></div></div>
+            <span id="baseline-value"></span>
+          </div>
+          <div id="shap-chart" class="shap-chart"></div>
+          <p class="legend">
+            <span class="legend-item"><span class="swatch attack"></span> pushes toward <b>attack</b></span>
+            <span class="legend-item"><span class="swatch normal"></span> pushes toward <b>normal</b></span>
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================== MODEL TRAINING ===================== -->
+  <main id="tab-training" class="tab-view hidden">
+    <div class="training-grid">
+      <section class="panel">
+        <div class="panel-head"><h2>Hyperparameters</h2></div>
+        <div class="kv-list" id="hyperparams"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>Split Comparison</h2></div>
+        <div id="split-chart" class="split-chart"></div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Confusion Matrix</h2><p class="hint-inline">NSL-KDD Test+ (held-out)</p></div>
+      <div class="cm-wrap" id="cm-wrap"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Recall by Attack Type</h2>
+        <p class="hint-inline">Test+ deliberately includes attack types absent from training</p>
+      </div>
+      <div id="attack-breakdown" class="attack-breakdown"></div>
+    </section>
+  </main>
+
+  <!-- ===================== SHAP EXPLAINABILITY ===================== -->
+  <main id="tab-shap" class="tab-view hidden">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Global Feature Importance</h2>
+        <p class="hint-inline">Mean absolute SHAP value across a background sample</p>
+      </div>
+      <div id="global-chart" class="global-chart"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>SHAP Summary — Impact Distribution</h2>
+        <p class="hint-inline">Each dot: one flow. Position: SHAP value. Color: feature value (teal=low, amber=high)</p>
+      </div>
+      <div id="beeswarm-chart" class="beeswarm-chart"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Model: XGBoost gradient-boosted trees · Explainability: SHAP TreeExplainer · Dataset: NSL-KDD
+  </footer>
+
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
